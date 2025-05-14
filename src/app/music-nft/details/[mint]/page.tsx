@@ -1,30 +1,27 @@
-import { fetchNFTs } from '@/services/server-utils';
-import ClientComponent from './client';
+// Remove 'use client' directive from this file since it has generateStaticParams
+// 'use client';
+
+import React from 'react';
+import { getMockNFTs, findNftByMint } from '@/lib/nft-utils';
+import NftDetailsClient from '@/components/music-nft/NftDetailsClient';
 
 /**
- * Generate static paths for each NFT at build time
+ * Generates static parameters for each NFT mint ID for static site generation
+ * This is crucial when using output: 'export' in next.config.js
  */
-export async function generateStaticParams() {
-  try {
-    const nfts = await fetchNFTs();
-    return nfts.map((nft) => ({
-      mint: nft.mint,
-    }));
-  } catch (error) {
-    console.error('Error generating static params:', error);
-    // Return hardcoded test data to ensure at least some pages are generated
-    return [
-      { mint: 'sample-mint-1' },
-      { mint: 'sample-mint-2' },
-      { mint: 'sample-mint-3' },
-      { mint: 'fallback-mint-1' }
-    ];
-  }
+export function generateStaticParams() {
+  // Return an array of params to generate statically
+  return getMockNFTs().map(nft => ({
+    mint: nft.mint,
+  }));
 }
 
-/**
- * The page component that renders NFT details
- */
-export default function Page({ params }: { params: { mint: string } }) {
-  return <ClientComponent mint={params.mint} />;
+export default function NftDetailsPage({ params }: { params: { mint: string } }) {
+  const mintId = params.mint;
+  
+  // We don't need to pre-fetch the NFT data here
+  // It will be fetched in the client component
+  
+  // Use the client component for all the interactive parts
+  return <NftDetailsClient mintId={mintId} />;
 } 

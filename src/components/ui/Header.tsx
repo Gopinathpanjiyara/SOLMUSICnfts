@@ -40,9 +40,6 @@ export function Header() {
   const { publicKey, connected } = useWallet();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [username, setUsername] = useState<string | null>(null);
-  const [showUsernameModal, setShowUsernameModal] = useState(false);
-  const [usernameInput, setUsernameInput] = useState('');
   const [isNavOpen, setIsNavOpen] = useState(false);
   
   useEffect(() => {
@@ -53,32 +50,6 @@ export function Header() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  // Check for saved username and handle first-time wallet connection
-  useEffect(() => {
-    if (connected && publicKey) {
-      const walletAddress = publicKey.toBase58();
-      const savedUsername = localStorage.getItem(`username_${walletAddress}`);
-      
-      if (savedUsername) {
-        setUsername(savedUsername);
-      } else {
-        // First time connection, prompt for username
-        setShowUsernameModal(true);
-      }
-    } else {
-      setUsername(null);
-    }
-  }, [connected, publicKey]);
-  
-  const handleSetUsername = () => {
-    if (!usernameInput || !publicKey) return;
-    
-    const walletAddress = publicKey.toBase58();
-    localStorage.setItem(`username_${walletAddress}`, usernameInput);
-    setUsername(usernameInput);
-    setShowUsernameModal(false);
-  };
 
   // Check if we're on a details page to highlight Marketplace in the nav
   const isDetailsPage = pathname?.includes('/music-nft/details/');
@@ -239,32 +210,6 @@ export function Header() {
                 </div>
               </nav>
             </div>
-        </div>
-      )}
-      
-      {/* Username Modal */}
-      {showUsernameModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-card rounded-xl shadow-xl p-6 max-w-md w-full">
-            <h2 className="text-2xl font-bold mb-4">Welcome to SolMusic!</h2>
-            <p className="mb-4">Please choose a username for your profile:</p>
-              <input
-                type="text"
-                value={usernameInput}
-                onChange={(e) => setUsernameInput(e.target.value)}
-              className="input input-bordered w-full mb-4" 
-              placeholder="Enter username"
-              />
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={handleSetUsername}
-                disabled={!usernameInput}
-                className="btn btn-primary"
-              >
-                Save Username
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </>

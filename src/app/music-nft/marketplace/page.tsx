@@ -10,16 +10,18 @@ import MusicNftCard, { MusicNftData } from '@/components/music-nft/MusicNftCard'
 import { fetchNFTsFromPinata, createNFTCopy } from '@/services/pinata';
 import { buyNFT, mintNFTCopy } from '@/services/solana';
 import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 
 type SortOption = 'price-low' | 'price-high' | 'newest';
 
 export default function MarketplacePage() {
   const { connected, publicKey, wallet } = useWallet();
   const { connection } = useConnection();
+  const router = useRouter();
   const [nfts, setNfts] = useState<MusicNftData[]>([]);
   const [filteredNfts, setFilteredNfts] = useState<MusicNftData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
+  const [processingMints, setProcessingMints] = useState<Set<string>>(new Set());
   const [selectedGenre, setSelectedGenre] = useState('all');
   const [sortOption, setSortOption] = useState<SortOption>('newest');
   const [showOnlyForSale, setShowOnlyForSale] = useState(true);
@@ -115,8 +117,8 @@ export default function MarketplacePage() {
   }, [nfts, selectedGenre, sortOption, showOnlyForSale]);
 
   const handleBuyNft = async (mint: string) => {
-    // Prevent multiple simultaneous purchases
-    if (processing) return;
+    // Prevent multiple simultaneous purchases of the same NFT
+    if (processingMints.has(mint)) return;
     
     // Log current wallet state for debugging
     console.log("Wallet state:", {
@@ -149,7 +151,8 @@ export default function MarketplacePage() {
     }
     
     try {
-      setProcessing(true);
+      // Update processing state for this specific NFT
+      setProcessingMints(prev => new Set([...prev, mint]));
       
       // Call the Solana service to process the NFT purchase
       const success = await buyNFT(connection, wallet, nft);
@@ -158,19 +161,40 @@ export default function MarketplacePage() {
         // Force refresh NFTs from Pinata
         await refreshNFTs();
         
-        // Show wallet viewing instructions
+        // Show wallet viewing instructions with a redirect
+        toast.success('Purchase successful! Redirecting to your wallet...', {
+          duration: 3000,
+        });
+        
+        // Clear all caches
+        localStorage.removeItem('_nft_cache_data');
+        
+        // Store wallet connection state in sessionStorage before redirecting
+        if (connected && wallet && publicKey) {
+          try {
+            sessionStorage.setItem('walletConnected', 'true');
+            sessionStorage.setItem('lastWalletAddress', publicKey.toBase58());
+          } catch (err) {
+            console.error("Failed to store wallet state:", err);
+          }
+        }
+        
+        // Give the user a moment to see the success message, then redirect to profile
+        // Use Next.js router.push instead of window.location for better state preservation
         setTimeout(() => {
-          toast('Check your wallet to view your new NFT!', {
-            icon: '🎵',
-            duration: 5000,
-          });
-        }, 2000);
+          router.push('/profile?refresh=true');
+        }, 3000);
       }
     } catch (error) {
       console.error('Error processing purchase:', error);
       toast.error('An error occurred while processing your purchase');
     } finally {
-      setProcessing(false);
+      // Remove this NFT from processing state
+      setProcessingMints(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(mint);
+        return newSet;
+      });
     }
   };
 
@@ -412,14 +436,14 @@ export default function MarketplacePage() {
                       {connected && nft.forSale && (
                         <button 
                           className={`px-3 py-1.5 ${
-                            processing 
+                            processingMints.has(nft.mint) 
                               ? "bg-gray-700 cursor-not-allowed" 
                               : "bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700"
                           } text-white font-medium rounded-lg shadow-sm shadow-primary/20 transition-all duration-300 flex items-center text-sm`}
                           onClick={() => handleBuyNft(nft.mint)}
-                          disabled={!connected || processing}
+                          disabled={!connected || processingMints.has(nft.mint)}
                         >
-                          {processing ? (
+                          {processingMints.has(nft.mint) ? (
                             <>
                               <div className="w-3.5 h-3.5 mr-1 rounded-full border-2 border-white border-t-transparent animate-spin"></div>
                               Processing...

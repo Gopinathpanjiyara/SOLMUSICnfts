@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { IconMusic, IconCoin, IconPlayerPlay, IconPlayerPause, IconEdit, IconTrash, IconUser, IconCircleCheck, IconWallet, IconReceipt, IconSend, IconShoppingCart } from '@tabler/icons-react';
+import { IconMusic, IconCoin, IconPlayerPlay, IconPlayerPause, IconEdit, IconTrash, IconUser, IconCircleCheck, IconWallet, IconReceipt, IconSend, IconShoppingCart, IconRefresh } from '@tabler/icons-react';
 import { AppHero, AppLayout, LoadingSpinner } from '@/components/ui/ui-layout';
 import { MusicNftData } from '@/components/music-nft/MusicNftCard';
 import { fetchNFTsFromPinata } from '@/services/pinata';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
-import { getTransactionsForWallet, TransactionData } from '@/lib/transaction-utils';
+import { TransactionData } from '@/lib/transaction-utils';
+import { loadUserProfile, recordTransaction } from '@/lib/user-profile-manager';
 
 // solMusic Logo component
 const SolMusicLogo = () => (
@@ -44,6 +45,27 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'owned' | 'sold' | 'purchased'>('owned');
   const [soldNfts, setSoldNfts] = useState<TransactionData[]>([]);
   const [purchasedNfts, setPurchasedNfts] = useState<TransactionData[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [redirectFromBuy, setRedirectFromBuy] = useState(false);
+  const [pinataProfileLoaded, setPinataProfileLoaded] = useState(false);
+
+  // Check if we were redirected from a purchase
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const wasConnected = sessionStorage.getItem('walletConnected') === 'true';
+      const lastWalletAddress = sessionStorage.getItem('lastWalletAddress');
+      
+      // If we have stored wallet info but aren't currently connected, we've been redirected
+      if (wasConnected && lastWalletAddress && !connected) {
+        setRedirectFromBuy(true);
+        console.log('Detected redirect from purchase, wallet connection may have been lost');
+      } else if (connected && publicKey) {
+        // If we are connected, clear the temporary session data
+        sessionStorage.removeItem('walletConnected');
+        sessionStorage.removeItem('lastWalletAddress');
+      }
+    }
+  }, [connected, publicKey]);
 
   // Define a function to load NFTs
   const loadNFTs = async (forceRefresh: boolean = false) => {
@@ -58,25 +80,67 @@ export default function ProfilePage() {
       
       setLoading(true);
       try {
-        // If forceRefresh is true, clear the localStorage cache to get fresh data
+        // Always clear the cache when forcing a refresh to ensure fresh data
         if (forceRefresh) {
-          console.log('Forced refresh requested, will clear cache and fetch from Pinata');
+          console.log('Forced refresh requested, will fetch from Pinata');
+          // We'll keep this for NFT data which is still using cache
+          localStorage.removeItem('_nft_cache_data');
+          sessionStorage.removeItem('_refresh_transactions');
         }
         
         // Pass forceRefresh parameter to fetchNFTsFromPinata
         const fetchedNfts = await fetchNFTsFromPinata(forceRefresh);
         
+        // Check if there are any pending NFT updates in session storage
+        let pendingUpdates: MusicNftData[] = [];
+        try {
+          const pendingNFTsJson = sessionStorage.getItem('_pending_nft_updates');
+          if (pendingNFTsJson) {
+            pendingUpdates = JSON.parse(pendingNFTsJson);
+            console.log(`Found ${pendingUpdates.length} pending NFT updates in session storage`);
+            // Clear pending updates after retrieving them
+            sessionStorage.removeItem('_pending_nft_updates');
+          }
+        } catch (error) {
+          console.error('Error processing pending NFT updates:', error);
+        }
+        
+        // Merge pending updates with fetched NFTs
+        // Replace any fetched NFT with its pending update version if mint matches
+        const mergedNfts = [...fetchedNfts];
+        
+        // Process each pending update
+        pendingUpdates.forEach(pendingNft => {
+          const existingIndex = mergedNfts.findIndex(nft => nft.mint === pendingNft.mint);
+          if (existingIndex >= 0) {
+            // Replace the existing NFT with the pending update
+            mergedNfts[existingIndex] = pendingNft;
+          } else {
+            // Add the new NFT to the list
+            mergedNfts.push(pendingNft);
+          }
+        });
+        
         // Filter NFTs to only include those owned by the current user
         const userAddress = publicKey.toBase58();
         console.log(`Loading NFTs for user: ${userAddress}`);
-        const userNfts = fetchedNfts.filter(nft => nft.owner === userAddress);
-        console.log(`Found ${userNfts.length} NFTs for user`);
+        const userNfts = mergedNfts.filter(nft => nft.owner === userAddress);
+        console.log(`Found ${userNfts.length} NFTs for user (including ${pendingUpdates.length} pending updates)`);
         setNfts(userNfts);
         
-        // Get transaction history for this wallet
-        const { soldNfts: sold, purchasedNfts: purchased } = getTransactionsForWallet(userAddress);
-        setSoldNfts(sold);
-        setPurchasedNfts(purchased);
+        // Load transaction data using the profile manager
+        const { username, soldNfts, purchasedNfts } = await loadUserProfile(userAddress);
+        
+        // Update state with loaded data
+        if (username) {
+          setUsername(username);
+        }
+        
+        setSoldNfts(soldNfts);
+        setPurchasedNfts(purchasedNfts);
+        
+        console.log(`Profile data: ${soldNfts.length} sold, ${purchasedNfts.length} purchased`);
+        
       } catch (error) {
         console.error('Error fetching from Pinata:', error);
         toast.error('Failed to load NFTs. Please try again later.');
@@ -101,35 +165,12 @@ export default function ProfilePage() {
       // We keep this separate from the if(connected) check below
       // to allow the UI to show the "connect wallet" message
     } else if (publicKey) {
-      const walletAddress = publicKey.toBase58();
-      const savedUsername = localStorage.getItem(`username_${walletAddress}`);
-      
-      if (savedUsername) {
-        setUsername(savedUsername);
-      } else {
-        // Ask for username only on first connection
-        askForUsername(walletAddress);
-      }
+      // Username and profile data will be loaded by WalletProfileAdapter 
+      // and in the loadNFTs function
     }
   }, [connected, publicKey]);
 
-  // Function to ask for username
-  const askForUsername = (walletAddress: string) => {
-    const defaultUsername = `User_${walletAddress.slice(0, 4)}`;
-    // Use browser's prompt for simplicity in this demo
-    const newUsername = window.prompt('Welcome! Please enter a username:', defaultUsername);
-    
-    if (newUsername) {
-      localStorage.setItem(`username_${walletAddress}`, newUsername);
-      setUsername(newUsername);
-    } else {
-      // If user cancels, use a default username
-      localStorage.setItem(`username_${walletAddress}`, defaultUsername);
-      setUsername(defaultUsername);
-    }
-  };
-
-  // Function to update username
+  // New function to update username with profile manager
   const updateUsername = () => {
     if (!publicKey) return;
     
@@ -137,9 +178,9 @@ export default function ProfilePage() {
     const newUsername = window.prompt('Enter new username:', username || '');
     
     if (newUsername) {
-      localStorage.setItem(`username_${walletAddress}`, newUsername);
-      setUsername(newUsername);
-      toast.success('Username updated successfully!');
+      // This would need a new function in the profile manager to update username
+      // For now, we'll just show a message
+      toast.error('Username updates are not supported in this version');
     }
   };
 
@@ -230,17 +271,40 @@ export default function ProfilePage() {
 
   // Add a refresh button to manually reload NFTs
   const refreshNFTs = () => {
+    if (isRefreshing) return;
+    
+    setIsRefreshing(true);
     toast.loading('Refreshing your NFTs...', { id: 'refreshing-nfts' });
-    // Force a refresh by clearing the cache
+    
+    // Always force a refresh by clearing the cache
     loadNFTs(true).then(() => {
       toast.dismiss('refreshing-nfts');
       toast.success('NFTs refreshed successfully!');
+      setIsRefreshing(false);
     }).catch((error) => {
       toast.dismiss('refreshing-nfts');
       toast.error('Failed to refresh NFTs');
       console.error('Error refreshing NFTs:', error);
+      setIsRefreshing(false);
     });
   };
+
+  // Check for refresh parameters in URL
+  useEffect(() => {
+    // Only run this on client side
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const shouldRefresh = urlParams.get('refresh') === 'true';
+      
+      if (shouldRefresh && connected && publicKey) {
+        console.log('Detected refresh parameter, refreshing data automatically');
+        // Clear the parameter from URL without page reload
+        window.history.replaceState({}, '', window.location.pathname);
+        // Force refresh data
+        refreshNFTs();
+      }
+    }
+  }, [connected, publicKey]);
 
   if (!connected) {
     return (
@@ -249,7 +313,10 @@ export default function ProfilePage() {
           <IconWallet className="w-16 h-16 text-muted-foreground mb-4" />
           <h2 className="text-xl font-bold mb-2">Wallet not connected</h2>
           <p className="text-muted-foreground max-w-md text-center mb-6">
-            Connect your wallet using the button in the header to view your NFTs and transaction history.
+            {redirectFromBuy 
+              ? "You were redirected after a purchase, but your wallet connection was lost. Please reconnect your wallet using the button in the header to view your NFTs."
+              : "Connect your wallet using the button in the header to view your NFTs and transaction history."
+            }
           </p>
         </div>
       </AppLayout>
@@ -278,9 +345,20 @@ export default function ProfilePage() {
         </div>
           
           <div className="relative pt-16 pb-12 px-8">
-            <div className="absolute top-6 right-6">
+            <div className="absolute top-6 right-6 flex items-center gap-4">
+              <button 
+                onClick={refreshNFTs}
+                disabled={isRefreshing}
+                className={`p-2 rounded-full transition-all duration-300 ${
+                  isRefreshing ? 'bg-muted cursor-not-allowed' : 'bg-background hover:bg-muted'
+                }`}
+                title="Refresh NFT data"
+              >
+                <IconRefresh className={`w-5 h-5 text-muted-foreground ${isRefreshing ? 'animate-spin' : ''}`} />
+              </button>
               <SolMusicLogo />
             </div>
+            
             <div className="flex flex-col lg:flex-row gap-10 items-start">
               {/* Avatar */}
               <div className="flex-shrink-0">
@@ -316,6 +394,39 @@ export default function ProfilePage() {
                     <div className="inline-flex items-center px-4 py-2 rounded-full bg-background backdrop-blur-sm border border-border">
                       <IconWallet className="w-4 h-4 mr-2 text-muted-foreground" />
                       <span className="font-mono text-muted-foreground text-sm">{publicKey?.toBase58().slice(0, 6)}...{publicKey?.toBase58().slice(-4)}</span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-4 my-4">
+                      <div className="flex items-center">
+                        <div className="bg-secondary/10 w-10 h-10 rounded-full flex items-center justify-center mr-2">
+                          <IconMusic className="w-5 h-5 text-secondary" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">NFTs</p>
+                          <p className="font-bold text-foreground">{totalNfts}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center">
+                        <div className="bg-secondary/10 w-10 h-10 rounded-full flex items-center justify-center mr-2">
+                          <IconCoin className="w-5 h-5 text-secondary" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Volume</p>
+                          <p className="font-bold text-foreground">{totalValue.toFixed(2)} SOL</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Refresh button */}
+                    <div className="flex mt-2">
+                      <button
+                        className="btn btn-outline btn-sm text-muted-foreground hover:text-foreground flex items-center gap-2"
+                        onClick={refreshNFTs}
+                        disabled={isRefreshing}
+                      >
+                        <IconRefresh className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -423,8 +534,8 @@ export default function ProfilePage() {
               activeTab === 'sold' ? 'bg-secondary' : 'bg-primary'
             }`}></span>
             {activeTab === 'owned' && <span>Browse your complete solMusic NFT collection.</span>}
-            {activeTab === 'sold' && <span>View all solMusic NFTs you&apos;ve sold to other collectors.</span>}
-            {activeTab === 'purchased' && <span>See the solMusic NFTs you&apos;ve bought or minted.</span>}
+            {activeTab === 'sold' && <span>View all solMusic NFTs you've sold to other collectors.</span>}
+            {activeTab === 'purchased' && <span>See the solMusic NFTs you've bought or minted.</span>}
       </div>
       
       {/* Content sections */}
@@ -511,7 +622,7 @@ export default function ProfilePage() {
                             <IconMusic className="w-16 h-16 text-primary/50" />
                     </div>
                           <h3 className="text-2xl font-bold mb-3 text-foreground">No solMusic NFTs Found</h3>
-                          <p className="text-muted-foreground mb-8 max-w-md mx-auto">You don&apos;t have any solMusic NFTs yet</p>
+                          <p className="text-muted-foreground mb-8 max-w-md mx-auto">You don't have any solMusic NFTs yet</p>
                           <Link href="/music-nft/create" className="btn bg-primary hover:bg-primary/90 border-0 text-primary-foreground btn-lg">
                             Create Your First solMusic NFT
                       </Link>
@@ -523,32 +634,32 @@ export default function ProfilePage() {
             
             {/* Sold NFTs Tab */}
             {activeTab === 'sold' && (
-              <div className="bg-base-100 rounded-xl shadow-md overflow-hidden">
-                <div className="border-b border-base-200 px-6 py-4 bg-base-100">
-                  <h2 className="text-xl font-bold flex items-center">
-                    <IconSend className="w-5 h-5 mr-2 text-primary" />
+              <div className="bg-card rounded-3xl shadow-xl overflow-hidden border border-border">
+                <div className="border-b border-border px-8 py-6 flex items-center justify-between">
+                  <h2 className="text-xl font-bold flex items-center text-foreground">
+                    <IconSend className="w-5 h-5 mr-3 text-secondary" />
                     Sales History
                   </h2>
                 </div>
                 
-                <div className="p-6">
+                <div className="p-8">
                   {soldNfts.length > 0 ? (
                     <div className="overflow-x-auto">
-                      <table className="table w-full bg-card rounded-xl shadow-sm">
+                      <table className="w-full divide-y divide-border">
                         <thead>
                           <tr>
-                            <th>NFT</th>
-                            <th>Title</th>
-                            <th>Sale Price</th>
-                            <th>Date</th>
-                            <th>Buyer</th>
-                            <th>Action</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground tracking-wider">NFT</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground tracking-wider">Title</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground tracking-wider">Sale Price</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground tracking-wider">Date</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground tracking-wider">Buyer</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground tracking-wider">Action</th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-border">
                           {soldNfts.map((transaction, index) => (
-                            <tr key={index} className="hover">
-                              <td>
+                            <tr key={index} className="hover:bg-muted/50">
+                              <td className="px-4 py-4">
                                 <div className="relative w-16 h-16 rounded-lg overflow-hidden">
                                   <img 
                                     src={transaction.nft.coverArt} 
@@ -557,25 +668,25 @@ export default function ProfilePage() {
                                   />
                                 </div>
                               </td>
-                              <td>
-                                <div className="font-medium">{transaction.nft.title}</div>
-                                <div className="text-sm opacity-70">{transaction.nft.artist}</div>
+                              <td className="px-4 py-4">
+                                <div className="font-medium text-foreground">{transaction.nft.title}</div>
+                                <div className="text-sm text-muted-foreground">{transaction.nft.artist}</div>
                               </td>
-                              <td>
-                                <div className="badge badge-success text-white p-3 font-medium">
+                              <td className="px-4 py-4">
+                                <div className="inline-flex items-center px-3 py-1 rounded-full bg-secondary/10 text-secondary font-medium">
                                   {transaction.price.toFixed(2)} SOL
                                 </div>
                               </td>
-                              <td>{formatDate(transaction.date)}</td>
-                              <td>
-                                <div className="badge badge-outline p-3">
+                              <td className="px-4 py-4 text-muted-foreground">{formatDate(transaction.date)}</td>
+                              <td className="px-4 py-4">
+                                <div className="inline-flex items-center px-3 py-1 rounded-full bg-background border border-border">
                                   {transaction.otherParty.slice(0, 6)}...{transaction.otherParty.slice(-4)}
                                 </div>
                               </td>
-                              <td>
+                              <td className="px-4 py-4">
                                 <Link 
                                   href={`/music-nft/details/${transaction.nft.mint}`} 
-                                  className="btn btn-xs btn-primary"
+                                  className="inline-flex items-center px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium"
                                 >
                                   View NFT
                                 </Link>
@@ -586,11 +697,11 @@ export default function ProfilePage() {
                       </table>
                     </div>
                   ) : (
-                    <div className="text-center py-12 border border-dashed border-base-200 rounded-xl bg-base-100">
+                    <div className="text-center py-12 border border-dashed border-border rounded-3xl bg-background/50">
                       <IconSend className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-                      <h3 className="text-xl font-bold mb-2">No Sales Yet</h3>
-                      <p className="text-muted-foreground mb-6">You haven&apos;t sold any NFTs yet</p>
-                      <Link href="/music-nft/marketplace" className="btn btn-primary">
+                      <h3 className="text-xl font-bold mb-2 text-foreground">No Sales Yet</h3>
+                      <p className="text-muted-foreground mb-6">You haven't sold any NFTs yet</p>
+                      <Link href="/music-nft/marketplace" className="inline-flex items-center px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium">
                         Go to Marketplace
                       </Link>
                     </div>
@@ -601,33 +712,33 @@ export default function ProfilePage() {
             
             {/* Purchased NFTs Tab */}
             {activeTab === 'purchased' && (
-              <div className="bg-base-100 rounded-xl shadow-md overflow-hidden">
-                <div className="border-b border-base-200 px-6 py-4 bg-base-100">
-                  <h2 className="text-xl font-bold flex items-center">
-                    <IconShoppingCart className="w-5 h-5 mr-2 text-primary" />
+              <div className="bg-card rounded-3xl shadow-xl overflow-hidden border border-border">
+                <div className="border-b border-border px-8 py-6 flex items-center justify-between">
+                  <h2 className="text-xl font-bold flex items-center text-foreground">
+                    <IconShoppingCart className="w-5 h-5 mr-3 text-primary" />
                     Purchase History
                   </h2>
                 </div>
                 
-                <div className="p-6">
+                <div className="p-8">
                   {purchasedNfts.length > 0 ? (
                     <div className="overflow-x-auto">
-                      <table className="table w-full bg-card rounded-xl shadow-sm">
+                      <table className="w-full divide-y divide-border">
                         <thead>
                           <tr>
-                            <th>NFT</th>
-                            <th>Title</th>
-                            <th>Type</th>
-                            <th>Price</th>
-                            <th>Date</th>
-                            <th>From</th>
-                            <th>Action</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground tracking-wider">NFT</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground tracking-wider">Title</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground tracking-wider">Type</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground tracking-wider">Price</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground tracking-wider">Date</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground tracking-wider">From</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground tracking-wider">Action</th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-border">
                           {purchasedNfts.map((transaction, index) => (
-                            <tr key={index} className="hover">
-                              <td>
+                            <tr key={index} className="hover:bg-muted/50">
+                              <td className="px-4 py-4">
                                 <div className="relative w-16 h-16 rounded-lg overflow-hidden">
                                   <img 
                                     src={transaction.nft.coverArt} 
@@ -636,30 +747,32 @@ export default function ProfilePage() {
                                   />
                                 </div>
                               </td>
-                              <td>
-                                <div className="font-medium">{transaction.nft.title}</div>
-                                <div className="text-sm opacity-70">{transaction.nft.artist}</div>
+                              <td className="px-4 py-4">
+                                <div className="font-medium text-foreground">{transaction.nft.title}</div>
+                                <div className="text-sm text-muted-foreground">{transaction.nft.artist}</div>
                               </td>
-                              <td>
-                                <div className={`badge p-3 font-medium ${transaction.type === 'mint' ? 'badge-secondary' : 'badge-primary'}`}>
+                              <td className="px-4 py-4">
+                                <div className={`inline-flex items-center px-3 py-1 rounded-full font-medium ${
+                                  transaction.type === 'mint' 
+                                    ? 'bg-secondary/10 text-secondary' 
+                                    : 'bg-primary/10 text-primary'
+                                }`}>
                                   {transaction.type === 'buy' ? 'Purchased' : 'Minted Copy'}
                                 </div>
                               </td>
-                              <td>
-                                <div className="font-medium">
-                                  {transaction.price.toFixed(2)} SOL
-                                </div>
+                              <td className="px-4 py-4 font-medium text-foreground">
+                                {transaction.price.toFixed(2)} SOL
                               </td>
-                              <td>{formatDate(transaction.date)}</td>
-                              <td>
-                                <div className="badge badge-outline p-3">
+                              <td className="px-4 py-4 text-muted-foreground">{formatDate(transaction.date)}</td>
+                              <td className="px-4 py-4">
+                                <div className="inline-flex items-center px-3 py-1 rounded-full bg-background border border-border">
                                   {transaction.otherParty.slice(0, 6)}...{transaction.otherParty.slice(-4)}
                                 </div>
                               </td>
-                              <td>
+                              <td className="px-4 py-4">
                                 <Link 
                                   href={`/music-nft/details/${transaction.nft.mint}`} 
-                                  className="btn btn-xs btn-primary"
+                                  className="inline-flex items-center px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium"
                                 >
                                   View NFT
                                 </Link>
@@ -670,11 +783,11 @@ export default function ProfilePage() {
                       </table>
                     </div>
                   ) : (
-                    <div className="text-center py-12 border border-dashed border-base-200 rounded-xl bg-base-100">
+                    <div className="text-center py-12 border border-dashed border-border rounded-3xl bg-background/50">
                       <IconShoppingCart className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-                      <h3 className="text-xl font-bold mb-2">No Purchases Yet</h3>
-                      <p className="text-muted-foreground mb-6">You haven&apos;t purchased any NFTs yet</p>
-                      <Link href="/music-nft/marketplace" className="btn btn-primary">
+                      <h3 className="text-xl font-bold mb-2 text-foreground">No Purchases Yet</h3>
+                      <p className="text-muted-foreground mb-6">You haven't purchased any NFTs yet</p>
+                      <Link href="/music-nft/marketplace" className="inline-flex items-center px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium">
                         Browse Marketplace
                       </Link>
                     </div>

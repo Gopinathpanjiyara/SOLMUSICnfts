@@ -1,6 +1,6 @@
 import { useState, memo, useCallback } from 'react';
 import Link from 'next/link';
-import { IconPlayerPlay, IconPlayerPause, IconShoppingCart, IconDots, IconCoin, IconMusic, IconShare } from '@tabler/icons-react';
+import { IconPlayerPlay, IconPlayerPause, IconShoppingCart, IconDots, IconCoin, IconMusic } from '@tabler/icons-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 
 export interface MusicNftData {
@@ -17,7 +17,6 @@ export interface MusicNftData {
   lastTransactionDate?: string;
   creationDate?: string;
   onChain?: boolean;
-  description?: string;
 }
 
 interface MusicNftCardProps {
@@ -89,25 +88,6 @@ const MusicNftCard = memo(({
     setShowMenu(false);
   };
   
-  const handleShareViaBlink = useCallback(() => {
-    // Create a blink view URL that will show all NFT info and handle the purchase
-    const blinkViewUrl = `/blink-view?nft=${nft.mint}&title=${encodeURIComponent(nft.title)}&artist=${encodeURIComponent(nft.artist)}&price=${nft.price}&coverArt=${encodeURIComponent(nft.coverArt)}&owner=${encodeURIComponent(nft.owner)}`;
-    
-    // Generate a shareable link for the viewing page
-    const shareableLink = `${window.location.origin}${blinkViewUrl}`;
-    
-    // Copy to clipboard for easy sharing
-    navigator.clipboard.writeText(shareableLink)
-      .then(() => {
-        alert("Shareable link copied to clipboard! You can now paste and share it.");
-      })
-      .catch(err => {
-        console.error("Failed to copy link: ", err);
-        // Fallback - open the blink directly
-        window.open(blinkViewUrl, '_blank');
-      });
-  }, [nft.mint, nft.title, nft.artist, nft.price, nft.coverArt, nft.owner]);
-  
   return (
     <div className="card bg-base-100 shadow-xl overflow-hidden group h-full">
       <figure className="relative aspect-square">
@@ -164,16 +144,6 @@ const MusicNftCard = memo(({
                 </button>
               )}
               
-              {/* Add Solana Blinks share button */}
-              <button 
-                className="btn btn-sm btn-secondary"
-                onClick={handleShareViaBlink}
-                aria-label="Share purchase link"
-              >
-                <IconShare className="w-4 h-4 mr-1" />
-                Share
-              </button>
-              
               <div className="relative">
                 <button 
                   className="btn btn-sm btn-circle"
@@ -213,13 +183,6 @@ const MusicNftCard = memo(({
                           Buy NFT
                         </button>
                       )}
-                      {/* Add Share via Blink option to the menu */}
-                      <button 
-                        className="block w-full text-left px-4 py-2 hover:bg-base-300"
-                        onClick={handleShareViaBlink}
-                      >
-                        Share purchase link
-                      </button>
                       <Link 
                         href={`/music-nft/details/${nft.mint}`}
                         className="block px-4 py-2 hover:bg-base-300"
@@ -277,4 +240,4 @@ const MusicNftCard = memo(({
 
 MusicNftCard.displayName = 'MusicNftCard';
 
-export default MusicNftCard;
+export default MusicNftCard; 

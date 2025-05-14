@@ -6,6 +6,7 @@ import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { clusterApiUrl } from '@solana/web3.js';
+import WalletProfileAdapter from '@/components/user/WalletProfileAdapter';
 
 // Import the styles for the wallet adapter
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -29,7 +30,9 @@ export function AppWalletProvider({ children }: { children: React.ReactNode }) {
     <ConnectionProvider endpoint={endpoint} config={{ commitment: 'confirmed' }}>
       <WalletProvider wallets={wallets} autoConnect={false}>
         <WalletModalProvider>
-          {children}
+          <WalletProfileAdapter>
+            {children}
+          </WalletProfileAdapter>
         </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>

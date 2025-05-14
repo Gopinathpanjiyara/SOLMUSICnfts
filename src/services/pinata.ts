@@ -172,37 +172,30 @@ export async function fetchNFTsFromPinata(forceRefresh: boolean = false): Promis
     // Define cache key
     const CACHE_KEY = '_nft_cache_data';
     
-    // Check if we're in a browser environment where localStorage is available
-    const isClient = typeof window !== 'undefined' && window.localStorage;
-    
-    // Check if we have a recent cache in localStorage (browser only)
-    if (isClient && !forceRefresh) {
-      const cachedData = localStorage.getItem(CACHE_KEY);
-      if (cachedData) {
-        try {
-          const nfts = JSON.parse(cachedData) as MusicNftData[];
-          // If the cache has NFTs, use it; otherwise, fetch fresh data
-          if (nfts.length > 0) {
-            console.log(`Using cached NFT data (${nfts.length} NFTs)`);
-            return nfts;
-          } else {
-            console.log('Cached data has 0 NFTs, fetching fresh data instead');
-            // Continue with the API call if cache has 0 NFTs
-          }
-        } catch (error) {
-          console.error('Error parsing cached NFT data, will fetch fresh data:', error);
-          // Continue with the API call if cache parsing fails
+    // Check if we have a recent cache in localStorage
+    const cachedData = localStorage.getItem(CACHE_KEY);
+    if (cachedData && !forceRefresh) {
+      try {
+        const nfts = JSON.parse(cachedData) as MusicNftData[];
+        // If the cache has NFTs, use it; otherwise, fetch fresh data
+        if (nfts.length > 0) {
+          console.log(`Using cached NFT data (${nfts.length} NFTs)`);
+          return nfts;
+        } else {
+          console.log('Cached data has 0 NFTs, fetching fresh data instead');
+          // Continue with the API call if cache has 0 NFTs
         }
-      } else if (forceRefresh) {
-        console.log('Force refresh requested, fetching fresh data from Pinata');
+      } catch (error) {
+        console.error('Error parsing cached NFT data, will fetch fresh data:', error);
+        // Continue with the API call if cache parsing fails
       }
-      
-      // Clear existing cache if force refreshing
-      if (forceRefresh && isClient) {
-        localStorage.removeItem(CACHE_KEY);
-      }
-    } else if (!isClient) {
-      console.log('Running in server environment, no localStorage available');
+    } else if (forceRefresh) {
+      console.log('Force refresh requested, fetching fresh data from Pinata');
+    }
+    
+    // Clear existing cache if force refreshing
+    if (forceRefresh) {
+      localStorage.removeItem(CACHE_KEY);
     }
     
     console.log('Making API request to Pinata...');
@@ -290,8 +283,8 @@ export async function fetchNFTsFromPinata(forceRefresh: boolean = false): Promis
     
     console.log(`Processed ${nfts.length} NFTs from Pinata data`);
     
-    // Only cache if we found NFTs and we're in a browser environment
-    if (nfts.length > 0 && isClient) {
+    // Only cache if we found NFTs
+    if (nfts.length > 0) {
       // Cache the results in localStorage for subsequent calls
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(nfts));
@@ -299,8 +292,6 @@ export async function fetchNFTsFromPinata(forceRefresh: boolean = false): Promis
       } catch (error) {
         console.error('Error caching NFT data:', error);
       }
-    } else if (!isClient) {
-      console.log('Not caching NFTs as running in server environment');
     } else {
       console.warn('No NFTs found in Pinata data, not updating cache');
     }
@@ -327,20 +318,16 @@ export async function updateNFTOwnership(nft: MusicNftData, newOwner: string): P
     // In a production app, this would update the metadata on IPFS/Pinata
     // For the demo, we need to update our local data to reflect ownership change
     
-    // Check if we're in a browser environment where localStorage is available
-    const isClient = typeof window !== 'undefined' && window.localStorage;
-    
     // Force clear the cache
-    if (isClient) {
-      localStorage.removeItem('_nft_cache_data');
-      console.log('Cleared NFT cache after ownership transfer');
-    }
+    localStorage.removeItem('_nft_cache_data');
+    console.log('Cleared NFT cache after ownership transfer');
     
     // Since we are in a demo, we can also manually update any pins that contain this NFT
     // This is a workaround for the lack of a real database
     try {
       // Fetch the latest data (this will trigger a load from Pinata)
       await fetchNFTsFromPinata(true);
+      console.log('Successfully refreshed NFT data from Pinata');
     } catch (error) {
       console.error('Error refreshing NFT data after ownership update:', error);
     }
@@ -359,28 +346,28 @@ export async function createNFTCopy(
   mintAddress?: string
 ): Promise<MusicNftData | null> {
   try {
-    // Create a copy with new owner and mint address
-    const nftCopy: MusicNftData = {
+    // Use provided mint address from Metaplex if available, otherwise generate a local one
+    const newMint = mintAddress || `copy-${Date.now()}-${Math.random().toString(36).substring(2, 8)}-${nft.mint.substring(0, 6)}`;
+    
+    // Create the new NFT metadata
+    const newNFT: MusicNftData = {
       ...nft,
+      mint: newMint,
       owner: newOwner,
-      mint: mintAddress || `copy-${nft.mint}-${Date.now()}`, // Generate a new mint ID if not provided
+      creator: nft.creator, // Original creator still gets credit
+      forSale: false, // New copy is not for sale by default
+      // Include creation timestamp
       creationDate: new Date().toISOString(),
+      // Add a flag to indicate this is a minted on-chain NFT if mintAddress was provided
+      onChain: !!mintAddress
     };
     
-    console.log(`Created NFT copy: ${nft.mint} → ${nftCopy.mint} (new owner: ${newOwner})`);
+    // Log for debug
+    console.log(`Created new NFT copy with mint ${newMint} for owner ${newOwner}`);
     
-    // For a more realistic demo, we could upload the NFT metadata to Pinata again
-    // with the new owner information, but for simplicity we just update local data
-    
-    // Check if we're in a browser environment where localStorage is available
-    const isClient = typeof window !== 'undefined' && window.localStorage;
-    
-    // Clear the cache to force reload next time
-    if (isClient) {
-      localStorage.removeItem('_nft_cache_data');
-    }
-    
-    return nftCopy;
+    // In a production app, this would store the new NFT on IPFS/Pinata
+    // For the demo, we just return the new NFT object
+    return newNFT;
   } catch (error) {
     console.error('Error creating NFT copy:', error);
     return null;

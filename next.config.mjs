@@ -4,14 +4,14 @@ const nextConfig = {
   swcMinify: true,
   images: {
     domains: ['gateway.pinata.cloud', 'placehold.co', 'assets.mixkit.co', 'images.unsplash.com'],
-    unoptimized: true, // Required for static export
+    unoptimized: true,
   },
-  // Static export configuration
-  output: 'export',
-  distDir: 'build',
-  // Add trailing slashes to URLs for better static export compatibility
+  // Remove the static export configuration
+  // output: 'export',
+  // distDir: 'build',
+  // Add trailing slashes to URLs for better compatibility
   trailingSlash: true,
-  // Disable basePath as it can cause issues with static exports
+  // Disable basePath as it can cause issues
   basePath: '',
   // Reduce build strictness
   eslint: { 

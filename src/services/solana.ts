@@ -5,6 +5,19 @@ import { updateNFTOwnership, createNFTCopy } from './pinata';
 import { Metaplex, walletAdapterIdentity, toMetaplexFile, NftWithToken, CreateNftOutput } from '@metaplex-foundation/js';
 import { BN } from 'bn.js';
 import { saveTransaction } from '@/lib/transaction-utils';
+import { recordTransaction } from '@/lib/user-profile-manager';
+
+// Helper function to persist wallet connection state during navigation
+function persistWalletState(walletAddress: string) {
+  try {
+    // Save wallet connection status to survive page navigation
+    sessionStorage.setItem('walletConnected', 'true');
+    sessionStorage.setItem('lastWalletAddress', walletAddress);
+    console.log('Stored wallet state for navigation');
+  } catch (error) {
+    console.error('Failed to persist wallet state:', error);
+  }
+}
 
 // Constants for transaction fees
 export const MINT_FEE = 0.01;
@@ -121,6 +134,21 @@ export async function buyNFT(
         );
       }
       
+      // Set a descriptive memo for the transaction that will appear in wallet UIs
+      try {
+        // Use proper import for memo program
+        const { createMemoInstruction } = await import('@solana/spl-memo');
+        
+        // Add a memo instruction with NFT details including price
+        transaction.add(
+          createMemoInstruction(`Purchase NFT: "${nft.title}" for ${totalPrice.toFixed(2)} SOL`)
+        );
+        console.log(`Added memo to transaction: Purchase NFT: "${nft.title}" for ${totalPrice.toFixed(2)} SOL`);
+      } catch (error) {
+        console.error('Failed to add memo to transaction:', error);
+        // Continue without memo if there's an error
+      }
+      
       // Update notification
       toast.dismiss('preparing-transaction');
       toast.loading('Please confirm transaction in your wallet...', { id: 'wallet-confirmation' });
@@ -161,48 +189,147 @@ export async function buyNFT(
         // Store the NFT state before updating ownership for transaction history
         const nftBeforeTransfer = { ...nft };
         
-        // Transfer the NFT metadata ownership 
-        toast.dismiss('confirming-transaction');
-        toast.loading('Updating NFT ownership...', { id: 'updating-ownership' });
-        
         // Update the NFT ownership in our database
         const buyerAddress = buyerPublicKey.toBase58();
         const sellerAddress = nft.owner;
         
-        // Save transaction data for the seller (they sold an NFT)
-        saveTransaction({
-          nft: nftBeforeTransfer,
+        // Save transaction data for the seller (they sold an NFT) using profile manager
+        const sellerTransaction = {
+          nft: {
+            ...nftBeforeTransfer,
+            // Keep the original owner in the NFT record for the sell transaction
+            owner: sellerAddress
+          },
           date: new Date().toISOString(),
-          type: 'sell',
+          type: 'sell' as const,
           price: nft.price,
-          otherParty: buyerAddress
+          otherParty: sellerAddress
+        };
+        
+        // We'll save the seller's transaction if this is not an unknown seller
+        if (sellerAddress !== 'unknown') {
+          // Record transaction for seller using profile manager
+          recordTransaction(sellerAddress, sellerTransaction, []);
+        }
+        
+        // Log the seller transaction
+        console.log('Saved seller transaction with details:', {
+          type: 'sell',
+          sellerAddress,
+          buyerAddress,
+          nftOwner: sellerAddress,
+          otherParty: sellerAddress,
+          price: nft.price
         });
         
         // Update the NFT ownership in our system
         // This will remove it from the seller's collection and add it to the buyer's
         const updatedNft = await updateNFTOwnership(nft, buyerAddress);
         
+        // Variable to store the on-chain mint address
+        let onChainMintAddress = updatedNft.mint;
+        
+        // Create a Metaplex-compatible NFT that will appear in the wallet
+        try {
+          toast.loading('Creating NFT in your wallet...', { id: 'creating-wallet-nft' });
+          
+          // Initialize Metaplex with the buyer's wallet
+          const metaplex = Metaplex.make(connection)
+            .use(walletAdapterIdentity(buyerWallet.adapter));
+          
+          // Prepare NFT metadata
+          const nftName = nft.title;
+          const nftSymbol = nft.artist.substring(0, 4).toUpperCase();
+          const nftDescription = `Music NFT by ${nft.artist}`;
+          
+          // Make sure we use a proper image URL
+          let coverArtUrl = nft.coverArt;
+          if (coverArtUrl.includes('ipfs://')) {
+            // Convert IPFS URL to gateway URL
+            coverArtUrl = coverArtUrl.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/');
+          }
+          
+          // Create NFT using Metaplex
+          const { nft: metaplexNft } = await metaplex.nfts().create({
+            name: nftName,
+            symbol: nftSymbol,
+            uri: coverArtUrl, // In production, this would be a proper metadata JSON URI
+            sellerFeeBasisPoints: 500, // 5% royalty
+            tokenOwner: buyerPublicKey,
+          });
+          
+          console.log('Wallet-visible NFT created on Solana:', metaplexNft);
+          
+          // Update the on-chain mint address
+          onChainMintAddress = metaplexNft.address.toString();
+          updatedNft.mint = onChainMintAddress;
+          
+          toast.dismiss('creating-wallet-nft');
+        } catch (nftError) {
+          console.error('Error creating wallet-visible NFT:', nftError);
+          // Continue even if wallet NFT creation fails - the purchase was still successful
+          toast.dismiss('creating-wallet-nft');
+        }
+        
         // Save transaction data for the buyer (they bought an NFT)
-        saveTransaction({
+        const buyerTransaction = {
           nft: {
-            ...updatedNft, // Use the updated NFT data with new owner
-            owner: buyerAddress
+            ...updatedNft, // Use the updated NFT data
+            owner: buyerAddress, // Ensure the new owner is set correctly
+            mint: onChainMintAddress // Use the potentially updated mint address
           },
           date: new Date().toISOString(),
-          type: 'buy',
+          type: 'buy' as const,
           price: nft.price,
           otherParty: sellerAddress
+        };
+        
+        // Record transaction for buyer using profile manager
+        recordTransaction(buyerAddress, buyerTransaction, [updatedNft]);
+        
+        // Log the buyer transaction
+        console.log('Saved buyer transaction with details:', {
+          type: 'buy',
+          buyerAddress,
+          sellerAddress,
+          nftOwner: buyerAddress,
+          otherParty: sellerAddress,
+          price: nft.price,
+          mintAddress: onChainMintAddress
         });
         
         // Clear NFT cache to ensure the updated ownership is reflected immediately
         localStorage.removeItem('_nft_cache_data');
         console.log('NFT cache cleared after ownership transfer');
         
-        toast.dismiss('updating-ownership');
+        // Also clear any cached transaction data to force reload
+        if (typeof window !== 'undefined') {
+          // Force a clean transactions fetch on next load
+          sessionStorage.setItem('_refresh_transactions', 'true');
+        }
+        
+        // Store the updated NFT in a special session storage to ensure profile page can access it right away
+        try {
+          const existingNFTs = sessionStorage.getItem('_pending_nft_updates');
+          const pendingNFTs = existingNFTs ? JSON.parse(existingNFTs) : [];
+          pendingNFTs.push({
+            ...updatedNft,
+            owner: buyerAddress,
+            mint: onChainMintAddress
+          });
+          sessionStorage.setItem('_pending_nft_updates', JSON.stringify(pendingNFTs));
+          
+          // Persist wallet state for cross-page navigation
+          persistWalletState(buyerAddress);
+        } catch (error) {
+          console.error('Error storing pending NFT updates:', error);
+        }
+        
+        toast.dismiss('confirming-transaction');
         
         // Show success notification with link to view in wallet
         toast.success(
-          `Successfully purchased "${nft.title}" for ${nft.price.toFixed(2)} SOL!`,
+          `Successfully purchased "${nft.title}" for ${nft.price.toFixed(2)} SOL! It will appear in your wallet soon.`,
           { duration: 8000 }
         );
         
@@ -214,7 +341,7 @@ export async function buyNFT(
         // Error handling code...
         
         // Dismiss any lingering notifications
-        ['wallet-confirmation', 'sending-transaction', 'confirming-transaction', 'updating-ownership']
+        ['wallet-confirmation', 'sending-transaction', 'confirming-transaction']
           .forEach(id => toast.dismiss(id));
         
         // Show error toast
@@ -414,18 +541,34 @@ export async function mintNFTCopy(
             throw new Error('Failed to record NFT in database');
         }
         
-        // Record the minting transaction
-        saveTransaction({
+        // Record the minting transaction using profile manager
+        const mintTransaction = {
           nft: newNft,
           date: new Date().toISOString(),
-          type: 'mint',
+          type: 'mint' as const,
           price: MINT_FEE,
           otherParty: nft.creator
-        });
+        };
+        
+        // Record transaction using profile manager
+        recordTransaction(userAddress, mintTransaction, [newNft]);
         
         // Clear NFT cache to ensure the new NFT is visible immediately
         localStorage.removeItem('_nft_cache_data');
         console.log('NFT cache cleared after minting');
+        
+        // Store the new NFT in a special session storage for immediate access
+        try {
+          const existingNFTs = sessionStorage.getItem('_pending_nft_updates');
+          const pendingNFTs = existingNFTs ? JSON.parse(existingNFTs) : [];
+          pendingNFTs.push(newNft);
+          sessionStorage.setItem('_pending_nft_updates', JSON.stringify(pendingNFTs));
+          
+          // Persist wallet state for cross-page navigation
+          persistWalletState(userAddress);
+        } catch (error) {
+          console.error('Error storing pending NFT updates:', error);
+        }
         
         toast.dismiss('creating-nft-copy');
         

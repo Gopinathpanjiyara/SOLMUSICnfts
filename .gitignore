@@ -5,7 +5,6 @@
 /.pnp
 .pnp.js
 .yarn/install-state.gz
-package-lock.json
 
 # testing
 /coverage
@@ -16,7 +15,6 @@ package-lock.json
 
 # production
 /build
-/dist
 
 # misc
 .DS_Store
@@ -29,10 +27,6 @@ yarn-error.log*
 
 # local env files
 .env*.local
-.env
-.env.development
-.env.test
-.env.production
 
 # vercel
 .vercel
@@ -40,42 +34,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# solana
-.anchor
-.DS_Store
-target
-**/*.rs.bk
-test-ledger
-.yarn
-Cargo.lock
-**/target/
-
-# IDEs and editors
-.idea
-.vscode
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Build output
-.next/trace
-.next/static/
-.next/server/
-.next/cache/
-.next/types/
-
-# Config backups
-*.config.js.bak
-*.config.ts.bak
+tmp
