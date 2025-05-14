@@ -27,6 +27,23 @@ export default function MarketplacePage() {
   const [showOnlyForSale, setShowOnlyForSale] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
 
+  // Force dark background for this page
+  useEffect(() => {
+    // Apply dark background to html and body
+    document.documentElement.style.backgroundColor = '#0f1729';
+    document.body.style.backgroundColor = '#0f1729';
+    
+    // Ensure dark theme is applied
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.documentElement.classList.add('dark');
+    
+    return () => {
+      // Clean up when navigating away (optional)
+      document.documentElement.style.backgroundColor = '';
+      document.body.style.backgroundColor = '';
+    };
+  }, []);
+
   // Fetch NFTs from Pinata when the component mounts
   useEffect(() => {
     async function loadNFTs() {
@@ -210,7 +227,7 @@ export default function MarketplacePage() {
 
   return (
     <AppLayout>
-      <div className="container max-w-7xl mx-auto px-4 py-6">
+      <div className="container max-w-7xl mx-auto px-4 py-6" data-page="marketplace">
         <div className="flex flex-wrap gap-3 justify-center mb-8">
           <div className="flex flex-wrap items-center gap-3">
             <Button

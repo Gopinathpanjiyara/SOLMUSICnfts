@@ -1,3 +1,7 @@
+// Load environment variables from .env file
+import { config } from 'dotenv';
+config();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false, // Disable strict mode for wallet compatibility
@@ -38,6 +42,14 @@ const nextConfig = {
     }
 
     return config;
+  },
+  // Make environment variables available to the browser
+  env: {
+    NEXT_PUBLIC_SOLANA_NETWORK: process.env.NEXT_PUBLIC_SOLANA_NETWORK,
+    NEXT_PUBLIC_PINATA_GATEWAY_URL: process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL,
+    NEXT_PUBLIC_PINATA_API_KEY: process.env.PINATA_API_KEY,
+    NEXT_PUBLIC_PINATA_API_SECRET: process.env.PINATA_API_SECRET,
+    NEXT_PUBLIC_PINATA_JWT: process.env.PINATA_JWT,
   },
 };
 

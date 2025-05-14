@@ -1,10 +1,13 @@
 import axios from 'axios';
 import { MusicNftData } from '@/components/music-nft/MusicNftCard';
+import env from '@/config/env';
 
-// API credentials
-const PINATA_API_KEY = 'd402d948a6ee45aa2d9a';
-const PINATA_API_SECRET = '40d2100d3db66ff4ccbefc523d3123d313cdf1f73472cb185ca24593291b3310';
-const PINATA_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiI0OWRlZjY3Yi02MzZmLTQxYTItYjYxNi0zNGI1NGNjM2FmY2IiLCJlbWFpbCI6ImFtYW5wbGF5ejIwMDRAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBpbl9wb2xpY3kiOnsicmVnaW9ucyI6W3siZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiRlJBMSJ9LHsiZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiTllDMSJ9XSwidmVyc2lvbiI6MX0sIm1mYV9lbmFibGVkIjpmYWxzZSwic3RhdHVzIjoiQUNUSVZFIn0sImF1dGhlbnRpY2F0aW9uVHlwZSI6InNjb3BlZEtleSIsInNjb3BlZEtleUtleSI6ImQ0MDJkOTQ4YTZlZTQ1YWEyZDlhIiwic2NvcGVkS2V5U2VjcmV0IjoiNDBkMjEwMGQzZGI2NmZmNGNjYmVmYzUyM2QzMTIzZDMxM2NkZjFmNzM0NzJjYjE4NWNhMjQ1OTMyOTFiMzMxMCIsImV4cCI6MTc3NjE4ODI1OH0.mDdyRude-XTee32G2yI175dcqfcIgUgYax3TQ_U890E';
+// API credentials from environment variables
+// Use client-side variables when running in browser
+const PINATA_API_KEY = env.isClient ? env.NEXT_PUBLIC_PINATA_API_KEY : env.PINATA_API_KEY;
+const PINATA_API_SECRET = env.isClient ? env.NEXT_PUBLIC_PINATA_API_SECRET : env.PINATA_API_SECRET;
+const PINATA_JWT = env.isClient ? env.NEXT_PUBLIC_PINATA_JWT : env.PINATA_JWT;
+const PINATA_GATEWAY_URL = env.NEXT_PUBLIC_PINATA_GATEWAY_URL;
 
 // Set up Pinata API client for JWT auth (used for data/pinList endpoint)
 const pinataApiJWT = axios.create({
@@ -254,15 +257,15 @@ export async function fetchNFTsFromPinata(forceRefresh: boolean = false): Promis
       
       // Update URLs based on file type
       if (fileType === 'audio') {
-        nftData.audioUrl = keyvalues.audioUrl || `https://gateway.pinata.cloud/ipfs/${pin.ipfs_pin_hash}`;
+        nftData.audioUrl = keyvalues.audioUrl || `${PINATA_GATEWAY_URL}${pin.ipfs_pin_hash}`;
       } else if (fileType === 'image') {
-        nftData.coverArt = keyvalues.coverArt || `https://gateway.pinata.cloud/ipfs/${pin.ipfs_pin_hash}`;
+        nftData.coverArt = keyvalues.coverArt || `${PINATA_GATEWAY_URL}${pin.ipfs_pin_hash}`;
       } else {
         // If file type is not specified, try to guess based on metadata or use as default
         if (!nftData.coverArt) {
-          nftData.coverArt = `https://gateway.pinata.cloud/ipfs/${pin.ipfs_pin_hash}`;
+          nftData.coverArt = `${PINATA_GATEWAY_URL}${pin.ipfs_pin_hash}`;
         } else if (!nftData.audioUrl) {
-          nftData.audioUrl = `https://gateway.pinata.cloud/ipfs/${pin.ipfs_pin_hash}`;
+          nftData.audioUrl = `${PINATA_GATEWAY_URL}${pin.ipfs_pin_hash}`;
         }
       }
     });
@@ -419,7 +422,7 @@ export async function createCombinedNFT(
         forSale: true,
         fileType: 'audio',
         // Include reference to cover art as 7th field
-        coverArt: `https://gateway.pinata.cloud/ipfs/${coverArtIpfsHash}`
+        coverArt: `${PINATA_GATEWAY_URL}${coverArtIpfsHash}`
       }
     };
     

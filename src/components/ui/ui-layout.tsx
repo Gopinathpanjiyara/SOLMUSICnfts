@@ -45,9 +45,9 @@ export function Card({ title, children, footerContent, className = '' }: CardPro
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen" style={{ backgroundColor: '#0f1729' }}>
       <Header />
-      <main className="flex-grow">
+      <main className="flex-grow" style={{ backgroundColor: '#0f1729' }}>
           {children}
       </main>
       <Footer />
