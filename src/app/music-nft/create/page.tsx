@@ -791,7 +791,7 @@ export default function CreateNFTPage() {
                             </div>
                             
                             {/* Upload Controls */}
-                            <div className="flex-1 flex flex-col space-y-4">
+                            <div className="flex-1 flex flex-col space-y-4 md:max-w-[250px] w-full">
                               <div className={`border-2 border-dashed ${errors.audioFile ? 'border-error' : formData.audioFile ? 'border-success' : 'border-border'} hover:border-primary transition-colors rounded-xl p-6 text-center bg-base-200/50 group-focus-within:border-primary`}>
                                 <label className={`btn ${errors.audioFile ? 'btn-error' : 'btn-primary'} w-full mb-3 h-12 shadow-md hover:shadow-lg transition-all rounded-xl`}>
                                   <IconMusic className="w-5 h-5 mr-2" />
@@ -803,11 +803,11 @@ export default function CreateNFTPage() {
                                     onChange={handleAudioChange}
                                   />
                                 </label>
-                                <div className="text-sm truncate p-2 bg-base-100 rounded-xl">
+                                <div className="text-sm p-2 bg-base-100 rounded-xl overflow-hidden w-full h-10 flex items-center">
                                   {formData.audioFile ? (
-                                    <span className="text-success flex items-center justify-center">
+                                    <span className="text-success flex items-center max-w-full w-full">
                                       <IconCircleCheck className="w-4 h-4 mr-1 flex-shrink-0" />
-                                      <span className="truncate">{formData.audioFile.name}</span>
+                                      <span className="truncate block w-full max-w-full overflow-hidden">{formData.audioFile.name}</span>
                                     </span>
                                   ) : (
                                     <span className="text-muted-foreground">No audio chosen</span>
@@ -839,11 +839,11 @@ export default function CreateNFTPage() {
                                     onChange={handleImageChange}
                                   />
                                 </label>
-                                <div className="text-sm truncate p-2 bg-base-100 rounded-xl">
+                                <div className="text-sm p-2 bg-base-100 rounded-xl overflow-hidden w-full h-10 flex items-center">
                                   {formData.coverImage ? (
-                                    <span className="text-success flex items-center justify-center">
+                                    <span className="text-success flex items-center max-w-full w-full">
                                       <IconCircleCheck className="w-4 h-4 mr-1 flex-shrink-0" />
-                                      <span className="truncate">{formData.coverImage.name}</span>
+                                      <span className="truncate block w-full max-w-full overflow-hidden">{formData.coverImage.name}</span>
                                     </span>
                                   ) : (
                                     <span className="text-muted-foreground">No image chosen</span>
@@ -998,7 +998,7 @@ export default function CreateNFTPage() {
             
             {/* Right sidebar */}
             <div className="md:col-span-1">
-              <div className="sticky top-24">
+              <div className="sticky top-24 w-full">
                 <div className="card bg-base-100 shadow-xl mb-8">
                   <div className="card-body px-8 py-8">
                     <h3 className="card-title text-xl mb-4 flex items-center">

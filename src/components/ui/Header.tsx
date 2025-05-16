@@ -18,6 +18,8 @@ function WalletButtonWrapper() {
     if (!portalContainer) {
       portalContainer = document.createElement('div');
       portalContainer.id = 'wallet-adapter-portal';
+      portalContainer.style.position = 'fixed';
+      portalContainer.style.zIndex = '99999';
       document.body.appendChild(portalContainer);
     }
     
@@ -30,7 +32,9 @@ function WalletButtonWrapper() {
   }, []);
   
   return (
-    <WalletMultiButton className="btn btn-primary btn-sm md:btn-md" />
+    <div className="wallet-wrapper relative z-[9999]">
+      <WalletMultiButton className="btn btn-primary btn-sm md:btn-md" />
+    </div>
   );
 }
 
@@ -45,11 +49,15 @@ export function Header() {
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
+      // Close mobile menu on scroll
+      if (mobileMenuOpen) {
+        setMobileMenuOpen(false);
+      }
     };
     
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [mobileMenuOpen]);
 
   // Check if we're on a details page to highlight Marketplace in the nav
   const isDetailsPage = pathname?.includes('/music-nft/details/');
@@ -130,11 +138,39 @@ export function Header() {
         #wallet-adapter-portal .wallet-adapter-dropdown-list {
           pointer-events: auto;
         }
+        
+        /* Force all main content to have a lower z-index than header and mobile nav */
+        main {
+          position: relative;
+          z-index: 1;
+        }
+        
+        /* Fix for any specific elements that might be appearing above the header */
+        .container:not(.header-container) {
+          position: relative;
+          z-index: 1;
+        }
+        
+        /* Mobile menu animation */
+        .mobile-menu {
+          animation: slideDown 0.2s ease-out;
+        }
+        
+        @keyframes slideDown {
+          0% {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
       `}</style>
-      <header className={`sticky top-0 z-50 ${scrolled ? 'backdrop-blur-xl bg-black/80' : 'bg-transparent'} transition-all duration-300`}>
+      <header className={`sticky top-0 z-[1000] ${scrolled ? 'backdrop-blur-xl bg-black/80' : 'bg-transparent'} transition-all duration-300`} style={{ backgroundColor: scrolled ? '#0f1729e6' : 'transparent' }}>
         <div className="header-gradient">
           <div className="header-glow"></div>
-          <div className="container mx-auto px-4 py-3">
+          <div className="container mx-auto px-4 py-3 header-container">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Link href="/" className="flex items-center gap-2">
@@ -187,7 +223,7 @@ export function Header() {
           
       {/* Mobile navigation menu */}
           {mobileMenuOpen && (
-        <div className="md:hidden absolute top-full left-0 right-0 bg-black/95 backdrop-blur-xl border-b border-gray-800">
+        <div className="md:hidden fixed top-[60px] left-0 right-0 bg-black/95 backdrop-blur-xl border-b border-gray-800 z-[999] mobile-menu" style={{ backgroundColor: '#0f1729e6' }}>
           <div className="container mx-auto p-4">
             <nav className="flex flex-col space-y-2">
                 {navLinks.map(link => (

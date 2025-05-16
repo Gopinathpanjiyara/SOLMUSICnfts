@@ -119,61 +119,27 @@ export default function HomePage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-12 max-w-3xl mx-auto">
               <div className="text-center group relative">
                 <div className="w-12 h-1 bg-purple-500/40 mx-auto mb-4 group-hover:bg-purple-400 transition-colors"></div>
-                <p className="text-white text-4xl font-bold mb-1 group-hover:text-purple-300 transition-colors">500+</p>
+                <p className="text-white text-4xl font-bold mb-1 group-hover:text-purple-300 transition-colors">
+                  {loading ? '...' : `${new Set(nfts.map(nft => nft.artist)).size}+`}
+                </p>
                 <p className="text-gray-400 text-sm tracking-wider">ARTISTS</p>
               </div>
-              
+          
               <div className="text-center group relative">
                 <div className="w-12 h-1 bg-indigo-500/40 mx-auto mb-4 group-hover:bg-indigo-400 transition-colors"></div>
-                <p className="text-white text-4xl font-bold mb-1 group-hover:text-indigo-300 transition-colors">120K SOL</p>
+                <p className="text-white text-4xl font-bold mb-1 group-hover:text-indigo-300 transition-colors">
+                  {loading ? '...' : `${nfts.length > 0 ? 
+                    Number(nfts.reduce((sum, nft) => sum + (Number(nft.price) || 0), 0)).toFixed(2) : '0'} SOL`}
+                </p>
                 <p className="text-gray-400 text-sm tracking-wider">TOTAL VOLUME</p>
               </div>
-              
+          
               <div className="text-center group relative">
                 <div className="w-12 h-1 bg-purple-500/40 mx-auto mb-4 group-hover:bg-purple-400 transition-colors"></div>
-                <p className="text-white text-4xl font-bold mb-1 group-hover:text-purple-300 transition-colors">5,000+</p>
+                <p className="text-white text-4xl font-bold mb-1 group-hover:text-purple-300 transition-colors">
+                  {loading ? '...' : `${nfts.length}+`}
+                </p>
                 <p className="text-gray-400 text-sm tracking-wider">NFTs CREATED</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-      
-      {/* Stats Section */}
-      <section className="w-full bg-gray-900 py-16">
-        <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="flex items-center bg-black neo-brutalism p-6 rounded-xl">
-              <div className="w-16 h-16 bg-purple-900/30 rounded-xl flex items-center justify-center mr-5">
-                <IconMusic className="w-8 h-8 text-purple-400" />
-            </div>
-              <div>
-                <p className="text-4xl font-bold text-white">{nfts.length || "1,257"}</p>
-                <p className="text-gray-400 font-medium uppercase tracking-wider text-sm">Total NFTs</p>
-              </div>
-          </div>
-          
-            <div className="flex items-center bg-black neo-brutalism p-6 rounded-xl">
-              <div className="w-16 h-16 bg-blue-900/30 rounded-xl flex items-center justify-center mr-5">
-                <IconUserCircle className="w-8 h-8 text-blue-400" />
-            </div>
-              <div>
-                <p className="text-4xl font-bold text-white">{new Set(nfts.map(nft => nft.artist)).size || "325"}</p>
-                <p className="text-gray-400 font-medium uppercase tracking-wider text-sm">Artists</p>
-              </div>
-          </div>
-          
-            <div className="flex items-center bg-black neo-brutalism p-6 rounded-xl">
-              <div className="w-16 h-16 bg-cyan-900/30 rounded-xl flex items-center justify-center mr-5">
-                <IconCoin className="w-8 h-8 text-cyan-400" />
-            </div>
-              <div>
-                <p className="text-4xl font-bold text-white">
-              {nfts.length > 0 ? 
-                Number(nfts.reduce((sum, nft) => sum + (Number(nft.price) || 0), 0)).toFixed(2) + " SOL" 
-                : "4,783 SOL"}
-            </p>
-                <p className="text-gray-400 font-medium uppercase tracking-wider text-sm">Volume</p>
               </div>
             </div>
           </div>
@@ -324,31 +290,25 @@ export default function HomePage() {
                   <Link href="/music-nft/shorts/" className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-800 text-white font-bold rounded-md hover:from-purple-700 hover:to-purple-900 transition-all hover:shadow-lg hover:shadow-purple-600/30 neo-brutalism">
                     <IconPlayerPlay className="w-6 h-6 mr-3" />
                     Launch Music Shorts
-                </Link>
+                  </Link>
                 </div>
               </div>
               
               <div className="md:w-1/2 relative">
                 <div className="h-full min-h-[400px] md:min-h-[500px]">
-                  {nfts.length > 2 ? (
-                    <div className="relative h-full">
+                  <div className="relative h-full">
                     <img 
-                      src={nfts[2].coverArt} 
+                      src="/solmusic.png" 
                       alt="Music Shorts Experience" 
-                        className="w-full h-full object-cover"
+                      className="w-full h-full object-cover"
                     />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent"></div>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="bg-black/30 backdrop-blur-sm rounded-full p-5 hover:bg-purple-600/80 transition-colors cursor-pointer hover:scale-110">
-                          <IconPlayerPlay className="w-12 h-12 text-white" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent"></div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="bg-black/30 backdrop-blur-sm rounded-full p-5 hover:bg-purple-600/80 transition-colors cursor-pointer hover:scale-110">
+                        <IconPlayerPlay className="w-12 h-12 text-white" />
+                      </div>
                     </div>
                   </div>
-                </div>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 to-black">
-                      <IconMusic className="w-24 h-24 text-purple-600/50" />
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
